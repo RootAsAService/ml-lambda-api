@@ -2,6 +2,7 @@
 
 import re
 import json
+import os
 import urllib.request
 import numpy as np
 from rasterio import features
@@ -12,6 +13,10 @@ from rio_tiler.utils import (array_to_img,
                              expression,
                              b64_encode_img)
 
+import stac_tools
+import s3_tools
+
+
 from lambda_proxy.proxy import API
 from distutils import util
 
@@ -19,7 +24,56 @@ from distutils import util
 APP = API(app_name="ml-lambda-api")
 
 
+bucket_name = os.environ['stac_bucket_name']
+default_algorithm = os.environ['default_algorithm']
 
+
+
+@APP.route('/ml_start/', methods=['GET'], cors=True)
+def ml_start():
+    """Handle ml_start requests."""
+
+    query_args = APP.current_request.query_params
+    query_args = query_args if isinstance(query_args, dict) else {}
+
+    geometry = query_args['geometry']
+    task_id = query_args.get('task_id')
+    algorithm = query_args.get('algorithm', 'default')
+    source_data = query_args.get('source', 'default')
+
+
+    ## create item_address:
+
+    item_key = "{task_id}/{algorithm}.json".format(task_id=task_id, algorithm=algorithm)
+    ## check if item exists:
+
+    stac_contents = s3_tools.read_stac_item(bucket_name, item_key)
+    if stac_contents:
+        return ('OK', 'application/json', json.dumps(stac_contents))
+
+    else:
+        stac_contents = stac_tools.create_stac_item(bucket_name,
+                                    item_key,
+                                    geometry,
+                                    task_id,
+                                    algorithm,
+                                    source_data)
+
+        return ('OK', 'application/json', json.dumps(stac_contents))
+
+
+
+
+
+
+
+
+
+
+
+
+
+    return ('OK', 'application/json', json.dumps({"geometry": data['geometry']}))
 
 
 
